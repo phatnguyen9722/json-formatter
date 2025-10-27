@@ -222,7 +222,7 @@ class AppUI:
 
     def on_find_next(self):
         txt = self._target_text()
-        # highlight handle 
+        # highlight handle
         if not txt.tag_ranges("search_match"):
             highlight_all(txt, self.search_var.get(), self.case_var.get())
         else:
