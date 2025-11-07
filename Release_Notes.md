@@ -9,8 +9,9 @@
 - Search and Highlight words feature. </br>
 
 ### Appearances:
-- Theme: `Light`, `Dark`, `Wine Red` </br>
+- Theme: `Light`, `Dark`, `Wine Red`. </br>
 
-
+## Version 1.0.1:
+- Add "buil_binary" script to build binary file. </br>
 
 

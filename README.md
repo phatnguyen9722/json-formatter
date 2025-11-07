@@ -18,3 +18,9 @@ uv sync
 ```
 uv run -m app.main
 ```
+
+### To build binary files:
+```
+uv run build_binary.py
+```
+- Binary files are stored in `/dist` folder. </br> 
