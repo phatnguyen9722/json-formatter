@@ -14,4 +14,5 @@
 ## Version 1.0.1:
 - Add "buil_binary" script to build binary file. </br>
 
-
+## Version 1.0.2:
+- Enhance Icon for app. </br>

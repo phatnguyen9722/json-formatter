@@ -1,6 +1,10 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkinter.scrolledtext import ScrolledText
+import os
+import sys
+import platform
+from PIL import Image, ImageTk
 
 from .controller import Controller
 from .tree_utils import insert_to_tree
@@ -21,6 +25,12 @@ class AppUI:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("JSON/Python Formatter (Modular)")
+
+        # storage for PhotoImage references so Tk doesn't garbage-collect them
+        self._icon_photo = None
+        self._header_photo = None
+
+        self._set_app_icon()
         self.controller = Controller(self)
         self._build_widgets()
         self.theme_manager = ThemeManager(
@@ -36,8 +46,139 @@ class AppUI:
         # menu switch theme
         self._build_menu()
 
-        # search highlight dùng theme
+        # search highlight tag uses theme
         self.theme_manager.set_highlight_tag("search_match")
+
+    # -------------------------
+    # Helper functions
+    # -------------------------
+    def _resource_dir(self):
+        """Return the directory where assets are located, handling frozen bundles."""
+        if getattr(sys, "frozen", False):
+            # PyInstaller / similar
+            return getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def _make_transparent(
+        self, image: Image.Image, threshold: int = 200
+    ) -> Image.Image:
+        """Turn near-white pixels transparent (preserve alpha if present)."""
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
+        datas = image.getdata()
+        new_data = []
+        for r, g, b, a in datas:
+            if r > threshold and g > threshold and b > threshold:
+                new_data.append((255, 255, 255, 0))
+            else:
+                new_data.append((r, g, b, a))
+        image.putdata(new_data)
+        return image
+
+    def _load_image(
+        self, path: str, size: tuple = None, make_transparent=True
+    ) -> Image.Image | None:
+        """Load an image from path, optionally make white → transparent, and resize.
+        Ensures full pixel data is loaded (avoids 'bad argument type' errors on macOS).
+        """
+        try:
+            with Image.open(path) as img:
+                # Force full load into memory before closing the file handle
+                img = img.copy()
+        except Exception as e:
+            print(f"Failed to open image {path}: {e}")
+            return None
+
+        try:
+            # Always ensure RGBA for Tk compatibility
+            img = img.convert("RGBA")
+
+            # Optional transparency cleanup
+            if make_transparent:
+                datas = img.getdata()
+                new_data = []
+                for r, g, b, a in datas:
+                    if r > 200 and g > 200 and b > 200:
+                        new_data.append((255, 255, 255, 0))
+                    else:
+                        new_data.append((r, g, b, a))
+                img.putdata(new_data)
+
+            # Optional resizing
+            if size:
+                resample = getattr(Image, "Resampling", None)
+                if resample:
+                    img = img.resize(size, Image.Resampling.LANCZOS)
+                else:
+                    img = img.resize(size, Image.ANTIALIAS)
+
+            return img
+
+        except Exception as e:
+            print(f"Failed to process image {path}: {e}")
+            return None
+
+    # -------------------------
+    # Icon handling
+    # -------------------------
+    def _set_app_icon(self):
+        """Set the application window icon with transparency (cross-platform)."""
+        import io
+        from PIL import Image, ImageTk
+
+        system = platform.system()
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_png = os.path.join(script_dir, "assets", "icon.png")
+        icon_ico = os.path.join(script_dir, "assets", "icon.ico")
+
+        try:
+            if system == "Darwin":
+                try:
+                    from AppKit import NSApplication, NSImage
+
+                    if os.path.exists(icon_png):
+                        app = NSApplication.sharedApplication()
+                        img = NSImage.alloc().initWithContentsOfFile_(icon_png)
+                        if img:
+                            app.setApplicationIconImage_(img)
+                            print("✅ macOS Dock icon set with transparency.")
+                    return
+                except Exception as e:
+                    print(f"Could not set macOS Dock icon: {e}")
+
+            # --- Windows / Linux: use transparent PNG for iconphoto() ---
+            if os.path.exists(icon_png):
+                img = Image.open(icon_png).convert("RGBA")
+
+                # Optional cleanup: remove white-ish backgrounds
+                datas = img.getdata()
+                new_data = []
+                for item in datas:
+                    if item[0] > 230 and item[1] > 230 and item[2] > 230:
+                        new_data.append((255, 255, 255, 0))  # transparent
+                    else:
+                        new_data.append(item)
+                img.putdata(new_data)
+
+                # Resize to appropriate window icon size
+                img = img.resize((256, 256), Image.Resampling.LANCZOS)
+
+                # Convert to Tk image
+                icon_photo = ImageTk.PhotoImage(img, master=self.root)
+                self.root.iconphoto(True, icon_photo)
+                self.root._icon_ref = icon_photo  # prevent GC
+                print("Window icon set with transparency ✅")
+
+            elif os.path.exists(icon_ico):
+                # Fallback .ico for Windows
+                self.root.iconbitmap(icon_ico)
+                print("Fallback .ico icon used ✅")
+
+            else:
+                print("No icon found — skipping icon setup.")
+
+        except Exception as e:
+            print(f"Could not set Tk icon: {e}")
 
     # --- UI build ---
     def _build_menu(self):
@@ -63,7 +204,78 @@ class AppUI:
         self.theme_manager.set_highlight_tag("search_match")
         self.theme_manager.save_choice()
 
+    def _build_header(self):
+        """Build the header frame with a safe, delayed icon loader for macOS."""
+        from PIL import Image, ImageTk
+
+        header_frame = ttk.Frame(self.root)
+        header_frame.pack(fill="x", padx=8, pady=(8, 4))
+
+        center_container = ttk.Frame(header_frame)
+        center_container.pack(expand=True)
+
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_path = os.path.join(script_dir, "assets", "icon.png")
+
+        # Title first (so layout stays stable)
+        title_label = ttk.Label(
+            center_container,
+            text="JSON/Python Formatter",
+            font=("TkDefaultFont", 14, "bold"),
+        )
+        title_label.pack(side="left", padx=(8, 0))
+
+        separator = ttk.Separator(self.root, orient="horizontal")
+        separator.pack(fill="x", padx=8, pady=(0, 4))
+
+        def _try_load_icon():
+            """Load the header icon after Tk window is realized."""
+            if not os.path.exists(icon_path):
+                print("Header icon not found.")
+                return
+
+            try:
+                img = Image.open(icon_path).convert("RGBA")
+
+                # Optional: remove white background
+                img_data = []
+                for r, g, b, a in img.getdata():
+                    if r > 230 and g > 230 and b > 230:
+                        img_data.append((255, 255, 255, 0))
+                    else:
+                        img_data.append((r, g, b, a))
+                img.putdata(img_data)
+
+                img = img.resize((32, 32), Image.Resampling.LANCZOS)
+
+                try:
+                    # First try full RGBA (transparency)
+                    photo = ImageTk.PhotoImage(img, master=self.root)
+                except Exception:
+                    # Fallback: convert to RGB (no transparency)
+                    print("Header RGBA icon failed; falling back to RGB (opaque).")
+                    photo = ImageTk.PhotoImage(img.convert("RGB"), master=self.root)
+
+                icon_label = tk.Label(
+                    center_container,
+                    image=photo,
+                    bg=self.root.cget("background"),
+                    borderwidth=0,
+                    highlightthickness=0,
+                )
+                icon_label.image = photo  # prevent GC
+                icon_label.pack(side="left", padx=(0, 8))
+                icon_label.lift(title_label)
+            except Exception as e:
+                print(f"Could not load header icon: {e}")
+
+        # Wait until window is drawn (macOS-safe)
+        self.root.after(200, _try_load_icon)
+
     def _build_widgets(self):
+        # Header with icon and title
+        self._build_header()
+
         self.notebook = ttk.Notebook(self.root)
         self.frame_input = ttk.Frame(self.notebook)
         self.frame_json = ttk.Frame(self.notebook)
@@ -159,7 +371,7 @@ class AppUI:
         self.root.bind("<F3>", lambda e: (self.on_find_next(), "break"))
         self.root.bind("<Shift-F3>", lambda e: (self.on_find_prev(), "break"))
 
-        # Ctrl-A to query all data in notebook
+        # Ctrl-A to select all
         for box in (self.input_box, self.output_box):
             box.bind("<Control-a>", self.select_all)
             box.bind("<Control-A>", self.select_all)
