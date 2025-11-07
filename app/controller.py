@@ -1,5 +1,5 @@
 import json
-from tkinter import simpledialog
+from PySide6.QtWidgets import QInputDialog
 from .parser import safe_parse
 from .encoder import SafeEncoder
 from .typeddict_generator import generate_from_json_string
@@ -42,13 +42,14 @@ class Controller:
         raw = self.ui.get_input()
 
         # Ask user for class name
-        class_name = simpledialog.askstring(
+        class_name, ok = QInputDialog.getText(
+            self.ui,
             "TypedDict Generator",
             "Enter class name for the TypedDict:",
-            initialvalue="Product",
+            text="Product",
         )
 
-        if not class_name:
+        if not ok or not class_name:
             return  # User cancelled
 
         # Generate TypedDict code

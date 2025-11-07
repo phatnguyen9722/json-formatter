@@ -1,10 +1,31 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
-from tkinter.scrolledtext import ScrolledText
-import os
 import sys
+import os
 import platform
-from PIL import Image, ImageTk
+from PIL import Image
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTabWidget,
+    QTextEdit,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QPushButton,
+    QLabel,
+    QLineEdit,
+    QRadioButton,
+    QCheckBox,
+    QFrame,
+    QMenuBar,
+    QMenu,
+    QMessageBox,
+    QSplitter,
+)
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QPixmap, QIcon, QFont, QKeySequence, QTextCursor, QAction
 
 from .controller import Controller
 from .tree_utils import insert_to_tree
@@ -21,20 +42,20 @@ from .themes.dark import THEME as DARK
 from .themes.wine_red import THEME as WINE_RED
 
 
-class AppUI:
-    def __init__(self, root: tk.Tk):
-        self.root = root
-        self.root.title("JSON/Python Formatter (Modular)")
+class AppUI(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("JSON/Python Formatter (Modular)")
 
-        # storage for PhotoImage references so Tk doesn't garbage-collect them
-        self._icon_photo = None
-        self._header_photo = None
+        # storage for QPixmap references
+        self._icon_pixmap = None
+        self._header_pixmap = None
 
         self._set_app_icon()
         self.controller = Controller(self)
         self._build_widgets()
         self.theme_manager = ThemeManager(
-            root=self.root,
+            root=self,
             text_widgets=(self.input_box, self.output_box),
             treeview=self.tree,
         )
@@ -124,7 +145,7 @@ class AppUI:
     def _set_app_icon(self):
         """Set the application window icon with transparency (cross-platform)."""
         import io
-        from PIL import Image, ImageTk
+        from PIL import Image
 
         system = platform.system()
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -146,7 +167,7 @@ class AppUI:
                 except Exception as e:
                     print(f"Could not set macOS Dock icon: {e}")
 
-            # --- Windows / Linux: use transparent PNG for iconphoto() ---
+            # --- Windows / Linux: use transparent PNG for setWindowIcon() ---
             if os.path.exists(icon_png):
                 img = Image.open(icon_png).convert("RGBA")
 
@@ -163,36 +184,44 @@ class AppUI:
                 # Resize to appropriate window icon size
                 img = img.resize((256, 256), Image.Resampling.LANCZOS)
 
-                # Convert to Tk image
-                icon_photo = ImageTk.PhotoImage(img, master=self.root)
-                self.root.iconphoto(True, icon_photo)
-                self.root._icon_ref = icon_photo  # prevent GC
+                # Convert to Qt pixmap
+                buffer = io.BytesIO()
+                img.save(buffer, format="PNG")
+                pixmap = QPixmap()
+                pixmap.loadFromData(buffer.getvalue())
+                icon = QIcon(pixmap)
+                self.setWindowIcon(icon)
+                self._icon_ref = icon  # prevent GC
                 print("Window icon set with transparency ✅")
 
             elif os.path.exists(icon_ico):
                 # Fallback .ico for Windows
-                self.root.iconbitmap(icon_ico)
+                icon = QIcon(icon_ico)
+                self.setWindowIcon(icon)
                 print("Fallback .ico icon used ✅")
 
             else:
                 print("No icon found — skipping icon setup.")
 
         except Exception as e:
-            print(f"Could not set Tk icon: {e}")
+            print(f"Could not set Qt icon: {e}")
 
     # --- UI build ---
     def _build_menu(self):
-        menubar = tk.Menu(self.root)
-        theme_menu = tk.Menu(menubar, tearoff=0)
-        theme_menu.add_command(
-            label="Light", command=lambda: self._apply_theme("light")
-        )
-        theme_menu.add_command(label="Dark", command=lambda: self._apply_theme("dark"))
-        theme_menu.add_command(
-            label="Wine Red", command=lambda: self._apply_theme("wine_red")
-        )
-        menubar.add_cascade(label="Theme", menu=theme_menu)
-        self.root.config(menu=menubar)
+        menubar = self.menuBar()
+        theme_menu = menubar.addMenu("Theme")
+
+        light_action = QAction("Light", self)
+        light_action.triggered.connect(lambda: self._apply_theme("light"))
+        theme_menu.addAction(light_action)
+
+        dark_action = QAction("Dark", self)
+        dark_action.triggered.connect(lambda: self._apply_theme("dark"))
+        theme_menu.addAction(dark_action)
+
+        wine_red_action = QAction("Wine Red", self)
+        wine_red_action.triggered.connect(lambda: self._apply_theme("wine_red"))
+        theme_menu.addAction(wine_red_action)
 
     def _apply_theme(self, name: str):
         if name == "dark":
@@ -206,30 +235,38 @@ class AppUI:
 
     def _build_header(self):
         """Build the header frame with a safe, delayed icon loader for macOS."""
-        from PIL import Image, ImageTk
+        from PIL import Image
 
-        header_frame = ttk.Frame(self.root)
-        header_frame.pack(fill="x", padx=8, pady=(8, 4))
+        header_widget = QWidget()
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(8, 8, 8, 4)
 
-        center_container = ttk.Frame(header_frame)
-        center_container.pack(expand=True)
+        center_widget = QWidget()
+        center_layout = QHBoxLayout(center_widget)
+        center_layout.setContentsMargins(0, 0, 0, 0)
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
         icon_path = os.path.join(script_dir, "assets", "icon.png")
 
         # Title first (so layout stays stable)
-        title_label = ttk.Label(
-            center_container,
-            text="JSON/Python Formatter",
-            font=("TkDefaultFont", 14, "bold"),
-        )
-        title_label.pack(side="left", padx=(8, 0))
+        title_label = QLabel("JSON/Python Formatter")
+        title_font = QFont()
+        title_font.setBold(True)
+        title_font.setPointSize(14)
+        title_label.setFont(title_font)
 
-        separator = ttk.Separator(self.root, orient="horizontal")
-        separator.pack(fill="x", padx=8, pady=(0, 4))
+        center_layout.addWidget(title_label)
+        header_layout.addWidget(center_widget)
+
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+
+        self.header_widget = header_widget
+        self.separator = separator
 
         def _try_load_icon():
-            """Load the header icon after Tk window is realized."""
+            """Load the header icon after Qt window is realized."""
             if not os.path.exists(icon_path):
                 print("Header icon not found.")
                 return
@@ -248,222 +285,313 @@ class AppUI:
 
                 img = img.resize((32, 32), Image.Resampling.LANCZOS)
 
-                try:
-                    # First try full RGBA (transparency)
-                    photo = ImageTk.PhotoImage(img, master=self.root)
-                except Exception:
-                    # Fallback: convert to RGB (no transparency)
-                    print("Header RGBA icon failed; falling back to RGB (opaque).")
-                    photo = ImageTk.PhotoImage(img.convert("RGB"), master=self.root)
+                # Convert to Qt pixmap
+                import io
 
-                icon_label = tk.Label(
-                    center_container,
-                    image=photo,
-                    bg=self.root.cget("background"),
-                    borderwidth=0,
-                    highlightthickness=0,
-                )
-                icon_label.image = photo  # prevent GC
-                icon_label.pack(side="left", padx=(0, 8))
-                icon_label.lift(title_label)
+                buffer = io.BytesIO()
+                img.save(buffer, format="PNG")
+                pixmap = QPixmap()
+                pixmap.loadFromData(buffer.getvalue())
+
+                icon_label = QLabel()
+                icon_label.setPixmap(pixmap)
+                icon_label.setFixedSize(32, 32)
+
+                center_layout.insertWidget(0, icon_label)
+                center_layout.insertSpacing(1, 8)
+
             except Exception as e:
                 print(f"Could not load header icon: {e}")
 
         # Wait until window is drawn (macOS-safe)
-        self.root.after(200, _try_load_icon)
+        QTimer.singleShot(200, _try_load_icon)
 
     def _build_widgets(self):
+        # Create central widget and main layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
         # Header with icon and title
         self._build_header()
+        main_layout.addWidget(self.header_widget)
+        main_layout.addWidget(self.separator)
 
-        self.notebook = ttk.Notebook(self.root)
-        self.frame_input = ttk.Frame(self.notebook)
-        self.frame_json = ttk.Frame(self.notebook)
-        self.frame_tree = ttk.Frame(self.notebook)
-        self.notebook.add(self.frame_input, text="Input")
-        self.notebook.add(self.frame_json, text="Pretty JSON")
-        self.notebook.add(self.frame_tree, text="Tree")
-        self.notebook.pack(fill="both", expand=True)
+        # Tab widget
+        self.notebook = QTabWidget()
+        self.frame_input = QWidget()
+        self.frame_json = QWidget()
+        self.frame_tree = QWidget()
 
-        # Input / Output
-        self.input_box = ScrolledText(self.frame_input, height=18, undo=True)
-        self.input_box.pack(fill="both", expand=True, padx=8, pady=8)
+        self.notebook.addTab(self.frame_input, "Input")
+        self.notebook.addTab(self.frame_json, "Pretty JSON")
+        self.notebook.addTab(self.frame_tree, "Tree")
+        main_layout.addWidget(self.notebook)
 
-        self.output_box = ScrolledText(self.frame_json, height=18, undo=True)
-        self.output_box.pack(fill="both", expand=True, padx=8, pady=8)
+        # Setup tab layouts
+        input_layout = QVBoxLayout(self.frame_input)
+        input_layout.setContentsMargins(8, 8, 8, 8)
 
-        # Tree
-        self.tree = ttk.Treeview(
-            self.frame_tree, columns=("type", "value"), show="tree headings"
-        )
-        self.tree.heading("#0", text="Key / Index")
-        self.tree.heading("type", text="Type")
-        self.tree.heading("value", text="Value")
-        self.tree.column("#0", stretch=True, width=320)
-        self.tree.column("type", width=120, anchor="w")
-        self.tree.column("value", stretch=True, width=400)
-        self.tree.pack(fill="both", expand=True, padx=8, pady=8)
+        json_layout = QVBoxLayout(self.frame_json)
+        json_layout.setContentsMargins(8, 8, 8, 8)
+
+        tree_layout = QVBoxLayout(self.frame_tree)
+        tree_layout.setContentsMargins(8, 8, 8, 8)
+
+        # Input / Output text areas
+        self.input_box = QTextEdit()
+        self.input_box.setAcceptRichText(False)
+        self.input_box.setMinimumHeight(400)
+        input_layout.addWidget(self.input_box)
+
+        self.output_box = QTextEdit()
+        self.output_box.setAcceptRichText(False)
+        self.output_box.setMinimumHeight(400)
+        json_layout.addWidget(self.output_box)
+
+        # Tree widget
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Key / Index", "Type", "Value"])
+        self.tree.setColumnWidth(0, 320)
+        self.tree.setColumnWidth(1, 120)
+        tree_layout.addWidget(self.tree)
 
         # Buttons
-        bar = ttk.Frame(self.root)
-        bar.pack(fill="x", padx=8, pady=(0, 4))
-        ttk.Button(
-            bar, text="Convert → Pretty", command=self.controller.convert_pretty
-        ).pack(side="left", padx=4)
-        ttk.Button(bar, text="Build Tree", command=self.controller.build_tree).pack(
-            side="left", padx=4
-        )
-        ttk.Button(bar, text="Minify JSON", command=self.controller.minify).pack(
-            side="left", padx=4
-        )
-        ttk.Button(
-            bar, text="Generate TypedDict", command=self.controller.generate_typeddict
-        ).pack(side="left", padx=4)
-        ttk.Button(bar, text="Clear Input", command=self.clear_input).pack(
-            side="right", padx=4
-        )
-        ttk.Button(bar, text="Clear Output", command=self.clear_output).pack(
-            side="right", padx=4
-        )
+        bar_widget = QWidget()
+        bar_layout = QHBoxLayout(bar_widget)
+        bar_layout.setContentsMargins(8, 4, 8, 4)
+
+        convert_btn = QPushButton("Convert → Pretty")
+        convert_btn.clicked.connect(self.controller.convert_pretty)
+        bar_layout.addWidget(convert_btn)
+
+        tree_btn = QPushButton("Build Tree")
+        tree_btn.clicked.connect(self.controller.build_tree)
+        bar_layout.addWidget(tree_btn)
+
+        minify_btn = QPushButton("Minify JSON")
+        minify_btn.clicked.connect(self.controller.minify)
+        bar_layout.addWidget(minify_btn)
+
+        typeddict_btn = QPushButton("Generate TypedDict")
+        typeddict_btn.clicked.connect(self.controller.generate_typeddict)
+        bar_layout.addWidget(typeddict_btn)
+
+        bar_layout.addStretch()
+
+        clear_output_btn = QPushButton("Clear Output")
+        clear_output_btn.clicked.connect(self.clear_output)
+        bar_layout.addWidget(clear_output_btn)
+
+        clear_input_btn = QPushButton("Clear Input")
+        clear_input_btn.clicked.connect(self.clear_input)
+        bar_layout.addWidget(clear_input_btn)
+
+        main_layout.addWidget(bar_widget)
 
         # Search bar
-        sbar = ttk.Frame(self.root)
-        sbar.pack(fill="x", padx=8, pady=(0, 8))
-        ttk.Label(sbar, text="Search:").pack(side="left")
-        self.search_var = tk.StringVar()
-        self.search_entry = ttk.Entry(sbar, textvariable=self.search_var, width=30)
-        self.search_entry.pack(side="left", padx=4)
+        sbar_widget = QWidget()
+        sbar_layout = QHBoxLayout(sbar_widget)
+        sbar_layout.setContentsMargins(8, 0, 8, 8)
 
-        self.target_var = tk.StringVar(value="input")
-        ttk.Radiobutton(
-            sbar, text="Input", variable=self.target_var, value="input"
-        ).pack(side="left", padx=(8, 2))
-        ttk.Radiobutton(
-            sbar, text="Output", variable=self.target_var, value="output"
-        ).pack(side="left", padx=2)
+        sbar_layout.addWidget(QLabel("Search:"))
 
-        self.case_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(sbar, text="Case-sensitive", variable=self.case_var).pack(
-            side="left", padx=8
-        )
+        self.search_var = ""
+        self.search_entry = QLineEdit()
+        self.search_entry.textChanged.connect(self._on_search_text_changed)
+        self.search_entry.setMinimumWidth(200)
+        sbar_layout.addWidget(self.search_entry)
 
-        ttk.Button(sbar, text="Highlight All", command=self.on_highlight_all).pack(
-            side="left", padx=4
+        self.target_var = "input"
+        input_radio = QRadioButton("Input")
+        input_radio.setChecked(True)
+        input_radio.toggled.connect(
+            lambda checked: self._on_target_changed("input") if checked else None
         )
-        ttk.Button(sbar, text="Find Next (F3)", command=self.on_find_next).pack(
-            side="left", padx=4
+        sbar_layout.addWidget(input_radio)
+
+        output_radio = QRadioButton("Output")
+        output_radio.toggled.connect(
+            lambda checked: self._on_target_changed("output") if checked else None
         )
-        ttk.Button(sbar, text="Find Prev (Shift+F3)", command=self.on_find_prev).pack(
-            side="left", padx=4
-        )
-        ttk.Button(sbar, text="Clear Highlight", command=self.on_clear_highlight).pack(
-            side="left", padx=4
-        )
+        sbar_layout.addWidget(output_radio)
+
+        self.case_var = False
+        case_check = QCheckBox("Case-sensitive")
+        case_check.toggled.connect(self._on_case_changed)
+        sbar_layout.addWidget(case_check)
+
+        highlight_btn = QPushButton("Highlight All")
+        highlight_btn.clicked.connect(self.on_highlight_all)
+        sbar_layout.addWidget(highlight_btn)
+
+        next_btn = QPushButton("Find Next (F3)")
+        next_btn.clicked.connect(self.on_find_next)
+        sbar_layout.addWidget(next_btn)
+
+        prev_btn = QPushButton("Find Prev (Shift+F3)")
+        prev_btn.clicked.connect(self.on_find_prev)
+        sbar_layout.addWidget(prev_btn)
+
+        clear_highlight_btn = QPushButton("Clear Highlight")
+        clear_highlight_btn.clicked.connect(self.on_clear_highlight)
+        sbar_layout.addWidget(clear_highlight_btn)
+
+        main_layout.addWidget(sbar_widget)
 
         # Highlight config
         setup_highlight(self.input_box)
         setup_highlight(self.output_box)
 
         # Shortcuts
-        self.root.bind(
-            "<Control-f>", lambda e: (self.search_entry.focus_set(), "break")
-        )
-        self.root.bind("<F3>", lambda e: (self.on_find_next(), "break"))
-        self.root.bind("<Shift-F3>", lambda e: (self.on_find_prev(), "break"))
+        self.shortcut_ctrl_f = QKeySequence("Ctrl+F")
+        self.shortcut_f3 = QKeySequence("F3")
+        self.shortcut_shift_f3 = QKeySequence("Shift+F3")
+
+        # Connect shortcuts (will be implemented with QAction in main window)
+        self._setup_shortcuts()
 
         # Ctrl-A to select all
-        for box in (self.input_box, self.output_box):
-            box.bind("<Control-a>", self.select_all)
-            box.bind("<Control-A>", self.select_all)
+        self.input_box.selectAll_shortcut = QKeySequence("Ctrl+A")
+        self.output_box.selectAll_shortcut = QKeySequence("Ctrl+A")
+
+    def _setup_shortcuts(self):
+        """Setup keyboard shortcuts using QAction."""
+        # Ctrl+F - Focus search
+        search_action = QAction(self)
+        search_action.setShortcut(QKeySequence("Ctrl+F"))
+        search_action.triggered.connect(lambda: self.search_entry.setFocus())
+        self.addAction(search_action)
+
+        # F3 - Find next
+        f3_action = QAction(self)
+        f3_action.setShortcut(QKeySequence("F3"))
+        f3_action.triggered.connect(self.on_find_next)
+        self.addAction(f3_action)
+
+        # Shift+F3 - Find previous
+        shift_f3_action = QAction(self)
+        shift_f3_action.setShortcut(QKeySequence("Shift+F3"))
+        shift_f3_action.triggered.connect(self.on_find_prev)
+        self.addAction(shift_f3_action)
+
+        # Ctrl+A - Select all for text widgets
+        select_all_action = QAction(self)
+        select_all_action.setShortcut(QKeySequence("Ctrl+A"))
+        select_all_action.triggered.connect(self._select_all_in_focused_widget)
+        self.addAction(select_all_action)
+
+    def _select_all_in_focused_widget(self):
+        """Select all text in the currently focused text widget."""
+        focused_widget = self.focusWidget()
+        if isinstance(focused_widget, QTextEdit):
+            focused_widget.selectAll()
+
+    def _on_search_text_changed(self, text):
+        """Handle search text changes."""
+        self.search_var = text
+
+    def _on_target_changed(self, target):
+        """Handle search target radio button changes."""
+        self.target_var = target
+
+    def _on_case_changed(self, checked):
+        """Handle case sensitivity checkbox changes."""
+        self.case_var = checked
 
     # --- UI ↔ Controller helpers ---
     def get_input(self) -> str:
-        return self.input_box.get("1.0", tk.END)
+        return self.input_box.toPlainText()
 
     def select_all(self, event=None):
-        widget = event.widget
-        widget.tag_add("sel", "1.0", "end-1c")
-        return "break"
+        """Select all text in a widget (for compatibility)."""
+        if hasattr(event, "widget") and hasattr(event.widget, "selectAll"):
+            event.widget.selectAll()
 
     def set_output(self, text: str):
-        self.output_box.delete("1.0", tk.END)
-        self.output_box.insert(tk.END, text)
+        self.output_box.setPlainText(text)
 
     def load_tree(self, data):
         # clear
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+        self.tree.clear()
         try:
             if isinstance(data, dict):
-                root_id = self.tree.insert(
-                    "", "end", text="root(dict)", values=("dict", "")
-                )
+                root_item = QTreeWidgetItem(self.tree)
+                root_item.setText(0, "root(dict)")
+                root_item.setText(1, "dict")
+                root_item.setText(2, "")
+
                 for k, v in data.items():
-                    insert_to_tree(self.tree, root_id, k, v)
-                self.tree.item(root_id, open=True)
+                    insert_to_tree(self.tree, root_item, k, v)
+                root_item.setExpanded(True)
+
             elif isinstance(data, list):
-                root_id = self.tree.insert(
-                    "", "end", text=f"root(list[{len(data)}])", values=("list", "")
-                )
+                root_item = QTreeWidgetItem(self.tree)
+                root_item.setText(0, f"root(list[{len(data)}])")
+                root_item.setText(1, "list")
+                root_item.setText(2, "")
+
                 for i, v in enumerate(data):
-                    insert_to_tree(self.tree, root_id, f"[{i}]", v)
-                self.tree.item(root_id, open=True)
+                    insert_to_tree(self.tree, root_item, f"[{i}]", v)
+                root_item.setExpanded(True)
+
             else:
-                self.tree.insert(
-                    "",
-                    "end",
-                    text="root(value)",
-                    values=(type(data).__name__, str(data)),
-                )
+                root_item = QTreeWidgetItem(self.tree)
+                root_item.setText(0, "root(value)")
+                root_item.setText(1, type(data).__name__)
+                root_item.setText(2, str(data))
+
         except Exception as e:
-            messagebox.showerror("Tree error", str(e))
+            QMessageBox.critical(self, "Tree error", str(e))
 
     def show_tab_json(self):
-        self.notebook.select(self.frame_json)
+        self.notebook.setCurrentWidget(self.frame_json)
 
     def show_tab_tree(self):
-        self.notebook.select(self.frame_tree)
+        self.notebook.setCurrentWidget(self.frame_tree)
 
     # --- Clear ---
     def clear_input(self):
-        self.input_box.delete("1.0", tk.END)
+        self.input_box.clear()
 
     def clear_output(self):
-        self.output_box.delete("1.0", tk.END)
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+        self.output_box.clear()
+        self.tree.clear()
 
     # --- Search ops ---
     def _target_text(self):
-        return self.input_box if self.target_var.get() == "input" else self.output_box
+        return self.input_box if self.target_var == "input" else self.output_box
 
     def on_highlight_all(self):
         txt = self._target_text()
-        highlight_all(txt, self.search_var.get(), self.case_var.get())
+        highlight_all(txt, self.search_var, self.case_var)
 
     def on_find_next(self):
         txt = self._target_text()
         # highlight handle
-        if not txt.tag_ranges("search_match"):
-            highlight_all(txt, self.search_var.get(), self.case_var.get())
+        if not hasattr(txt, "_search_matches") or not txt._search_matches:
+            highlight_all(txt, self.search_var, self.case_var)
         else:
-            find_next(txt, self.search_var.get(), self.case_var.get())
+            find_next(txt, self.search_var, self.case_var)
 
     def on_find_prev(self):
         txt = self._target_text()
-        if not txt.tag_ranges("search_match"):
-            highlight_all(txt, self.search_var.get(), self.case_var.get())
+        if not hasattr(txt, "_search_matches") or not txt._search_matches:
+            highlight_all(txt, self.search_var, self.case_var)
         else:
-            find_prev(txt, self.search_var.get(), self.case_var.get())
+            find_prev(txt, self.search_var, self.case_var)
 
     def on_clear_highlight(self):
         clear_highlight(self._target_text())
 
 
 def main():
-    root = tk.Tk()
-    AppUI(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    window = AppUI()
+    window.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

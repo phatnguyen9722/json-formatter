@@ -8,5 +8,5 @@ dependencies = [
     "black>=25.9.0",
     "pillow>=12.0.0",
     "pyinstaller>=6.16.0",
-    "pyobjc>=12.0",
+    "pyside6>=6.8.0",
 ]
