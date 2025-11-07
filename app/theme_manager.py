@@ -63,15 +63,28 @@ class ThemeManager:
             ".", background=self.theme["bg"], foreground=self.theme["fg"]
         )
 
-        # Button
+        # Button - Enhanced styling for better color visibility
         self.style.configure(
             "TButton",
             background=self.theme["btn_bg"],
             foreground=self.theme["btn_fg"],
             padding=6,
+            borderwidth=1,
+            relief="raised",
         )
         self.style.map(
-            "TButton", background=[("active", self._shade(self.theme["btn_bg"], -8))]
+            "TButton",
+            background=[
+                ("active", self._shade(self.theme["btn_bg"], 15)),
+                ("pressed", self._shade(self.theme["btn_bg"], -10)),
+                ("disabled", self._shade(self.theme["btn_bg"], -20)),
+            ],
+            foreground=[
+                ("active", self.theme["btn_fg"]),
+                ("pressed", self.theme["btn_fg"]),
+                ("disabled", self._shade(self.theme["btn_fg"], -30)),
+            ],
+            relief=[("pressed", "sunken")],
         )
 
         # Label, Frame

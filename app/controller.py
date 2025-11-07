@@ -1,6 +1,8 @@
 import json
+from tkinter import simpledialog
 from .parser import safe_parse
 from .encoder import SafeEncoder
+from .typeddict_generator import generate_from_json_string
 
 
 class Controller:
@@ -34,3 +36,22 @@ class Controller:
         data = safe_parse(raw)
         self.ui.load_tree(data)
         self.ui.show_tab_tree()
+
+    def generate_typeddict(self):
+        """Generate Python TypedDict from JSON input."""
+        raw = self.ui.get_input()
+
+        # Ask user for class name
+        class_name = simpledialog.askstring(
+            "TypedDict Generator",
+            "Enter class name for the TypedDict:",
+            initialvalue="Product",
+        )
+
+        if not class_name:
+            return  # User cancelled
+
+        # Generate TypedDict code
+        typeddict_code = generate_from_json_string(raw, class_name)
+        self.ui.set_output(typeddict_code)
+        self.ui.show_tab_json()

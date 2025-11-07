@@ -14,6 +14,7 @@ from .search_utils import (
 from .theme_manager import ThemeManager
 from .themes.light import THEME as LIGHT
 from .themes.dark import THEME as DARK
+from .themes.wine_red import THEME as WINE_RED
 
 
 class AppUI:
@@ -46,12 +47,17 @@ class AppUI:
             label="Light", command=lambda: self._apply_theme("light")
         )
         theme_menu.add_command(label="Dark", command=lambda: self._apply_theme("dark"))
+        theme_menu.add_command(
+            label="Wine Red", command=lambda: self._apply_theme("wine_red")
+        )
         menubar.add_cascade(label="Theme", menu=theme_menu)
         self.root.config(menu=menubar)
 
     def _apply_theme(self, name: str):
         if name == "dark":
             self.theme_manager.load_theme(DARK)
+        elif name == "wine_red":
+            self.theme_manager.load_theme(WINE_RED)
         else:
             self.theme_manager.load_theme(LIGHT)
         self.theme_manager.set_highlight_tag("search_match")
@@ -98,6 +104,9 @@ class AppUI:
         ttk.Button(bar, text="Minify JSON", command=self.controller.minify).pack(
             side="left", padx=4
         )
+        ttk.Button(
+            bar, text="Generate TypedDict", command=self.controller.generate_typeddict
+        ).pack(side="left", padx=4)
         ttk.Button(bar, text="Clear Input", command=self.clear_input).pack(
             side="right", padx=4
         )
