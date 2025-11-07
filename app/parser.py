@@ -27,7 +27,7 @@ def safe_parse(raw: str):
     except Exception:
         pass
 
-    # 3b) True/False/None, ' → " rồi thử JSON
+    # 3b) True/False/None, ' → " then try JSON
     tmp = cleaned
     tmp = re.sub(r"(?<![A-Za-z0-9_])True(?![A-Za-z0-9_])", "true", tmp)
     tmp = re.sub(r"(?<![A-Za-z0-9_])False(?![A-Za-z0-9_])", "false", tmp)

@@ -143,13 +143,13 @@ class ThemeManager:
     def _apply_treeview(self):
         if not self.treeview:
             return
-        # ttk.Style đã set, đảm bảo rowheight nếu cần
+        # ttk.Style is set, max sure rowheight if needed
         try:
             self.style.configure("Treeview", rowheight=22)
         except Exception:
             pass
 
-    # helper: chỉnh độ sáng màu hex
+    # helper: Modify hex color
     def _shade(self, hex_color, percent=-10):
         # percent: -100..+100
         hex_color = hex_color.lstrip("#")
